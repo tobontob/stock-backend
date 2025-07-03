@@ -2,7 +2,7 @@ import requests
 import time
 
 def analyze_sentiment(text, max_retries=2):
-    API_URL = "https://jccompany2007-stock-sentiment.hf.space/run/predict/"
+    API_URL = "https://jccompany2007-stock-sentiment.hf.space/api/predict/"
     for attempt in range(max_retries):
         try:
             response = requests.post(API_URL, json={"data": [text]}, timeout=20)
