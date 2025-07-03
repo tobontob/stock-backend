@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from sentiment import analyze_sentiment
 
 load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -16,7 +15,7 @@ for news in raw_col.find().sort("published", -1).limit(20):
     text = news.get("content") or news.get("title")
     if not text:
         continue
-    sentiment = analyze_sentiment(text)
+    sentiment = None  # 추후 REST API 연동 예정
     analyzed = {
         "_id": news["_id"],
         "title": news.get("title"),
