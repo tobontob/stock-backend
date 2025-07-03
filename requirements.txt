@@ -1,0 +1,4 @@
+feedparser
+requests
+pymongo
+python-dotenv 
