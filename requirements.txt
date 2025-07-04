@@ -2,4 +2,6 @@ feedparser
 requests
 pymongo
 python-dotenv
-beautifulsoup4 
+beautifulsoup4
+torch>=1.10.0
+transformers>=4.30.0 
