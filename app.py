@@ -25,7 +25,10 @@ app.add_middleware(
 
 @app.get("/analyzed_news")
 def get_analyzed_news():
-    news_list = list(result_col.find().sort("published", -1).limit(20))
-    for news in news_list:
-        news["_id"] = str(news["_id"])
-    return {"news": news_list} 
+    try:
+        news_list = list(result_col.find().sort("published", -1).limit(20))
+        for news in news_list:
+            news["_id"] = str(news["_id"])
+        return {"news": news_list}
+    except Exception as e:
+        return {"error": str(e)} 
