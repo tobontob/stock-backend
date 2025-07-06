@@ -23,6 +23,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"message": "API is alive"}
+
 @app.get("/analyzed_news")
 def get_analyzed_news():
     try:
