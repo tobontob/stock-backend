@@ -5,4 +5,5 @@ python-dotenv
 beautifulsoup4
 torch>=1.10.0
 transformers>=4.30.0
-uvicorn 
+uvicorn
+fastapi 
