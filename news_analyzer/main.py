@@ -11,8 +11,8 @@ db = client["news_db"]
 raw_col = db["raw_news"]
 result_col = db["analyzed_news"]
 
-# 최근 20개 뉴스만 예시로 분석
-for news in raw_col.find().sort("published", -1).limit(20):
+# 전체 뉴스 분석
+for news in raw_col.find().sort("published", -1):
     text = news.get("content") or news.get("title")
     if not text:
         continue
