@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from analyze_sentiment import analyze_sentiment
 import pandas as pd
+import requests
+from io import StringIO
 
 load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -14,7 +16,9 @@ result_col = db["analyzed_news"]
 
 # KRX 상장종목목록 CSV 다운로드 (코스피+코스닥)
 url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download"
-df = pd.read_html(url, header=0)[0]
+response = requests.get(url)
+response.encoding = 'euc-kr'
+df = pd.read_html(StringIO(response.text), header=0)[0]
 df = df[['회사명', '종목코드', '업종']]
 df['종목코드'] = df['종목코드'].apply(lambda x: str(x).zfill(6))
 stock_list = df.to_dict('records')
