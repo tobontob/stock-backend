@@ -28,13 +28,11 @@ def root():
     return {"message": "API is alive"}
 
 @app.get("/analyzed_news")
-def get_analyzed_news(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100)):
+def get_analyzed_news():
     try:
-        skip = (page - 1) * page_size
-        news_list = list(result_col.find().sort("published", -1).skip(skip).limit(page_size))
-        total = result_col.count_documents({})
+        news_list = list(result_col.find().sort("published", -1))
         for news in news_list:
             news["_id"] = str(news["_id"])
-        return {"news": news_list, "total": total}
+        return {"news": news_list}
     except Exception as e:
         return {"error": str(e)} 
