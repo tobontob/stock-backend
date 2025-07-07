@@ -34,7 +34,7 @@ if __name__ == "__main__":
             print(f"[크롤러] API 뉴스 수집 에러: {e}")
             api_news = []
 
-        # 3. 본문 크롤링 및 정제 (content가 None이어도 저장 허용)
+        # 3. 본문 크롤링 및 정제 (content가 None이거나 'ONLY AVAILABLE IN PAID PLANS'이어도 저장 허용)
         all_news = rss_news + api_news
         print(f"[크롤러] 전체 뉴스 합계: {len(all_news)}건")
         print(f"[크롤러] 전체 뉴스 샘플: {all_news[:2]}")
@@ -43,13 +43,18 @@ if __name__ == "__main__":
             try:
                 content = fetch_news_content(news["link"])
                 clean_content = clean_news_content(content)
-                news["content"] = clean_content  # None이어도 저장
+                # newsdata.io 무료 플랜은 content가 'ONLY AVAILABLE IN PAID PLANS'일 수 있으므로, 이 경우에도 저장
+                if clean_content is not None:
+                    news["content"] = clean_content
+                else:
+                    news["content"] = news.get("content")  # 기존 content 유지(혹은 None)
             except Exception as e:
                 print(f"[크롤러] 본문 크롤링 에러: {news.get('link')}, {e}")
-                news["content"] = None
+                news["content"] = news.get("content")  # 기존 content 유지(혹은 None)
             saved_count += 1
         print(f"[크롤러] 본문 크롤링 후 전체 뉴스 샘플: {all_news[:5]}")
         print(f"[크롤러] 본문 크롤링 후 content None 개수: {sum(1 for n in all_news if n['content'] is None)}")
+        print(f"[크롤러] 본문 크롤링 후 'ONLY AVAILABLE IN PAID PLANS' 개수: {sum(1 for n in all_news if n.get('content') == 'ONLY AVAILABLE IN PAID PLANS')}")
 
         # 4. MongoDB 저장
         print(f"[크롤러] MongoDB 저장 시작: {saved_count}건")
