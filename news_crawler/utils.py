@@ -2,6 +2,8 @@ from pymongo import MongoClient
 from hashlib import md5
 
 def save_news_to_mongo(news_list, mongo_uri, db_name="news_db", collection="raw_news"):
+    print(f"[크롤러] 저장 대상 뉴스 개수: {len(news_list)}")
+    print(f"[크롤러] 저장 대상 뉴스 샘플: {news_list[:2]}")
     client = MongoClient(mongo_uri)
     db = client[db_name]
     for news in news_list:
