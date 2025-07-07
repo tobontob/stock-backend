@@ -34,19 +34,22 @@ if __name__ == "__main__":
             print(f"[크롤러] API 뉴스 수집 에러: {e}")
             api_news = []
 
-        # 3. 본문 크롤링 및 정제
+        # 3. 본문 크롤링 및 정제 (content가 None이어도 저장 허용)
         all_news = rss_news + api_news
         print(f"[크롤러] 전체 뉴스 합계: {len(all_news)}건")
         print(f"[크롤러] 전체 뉴스 샘플: {all_news[:2]}")
         saved_count = 0
         for news in all_news:
-            content = fetch_news_content(news["link"])
-            clean_content = clean_news_content(content)
-            if clean_content:
-                news["content"] = clean_content
-            else:
+            try:
+                content = fetch_news_content(news["link"])
+                clean_content = clean_news_content(content)
+                news["content"] = clean_content  # None이어도 저장
+            except Exception as e:
+                print(f"[크롤러] 본문 크롤링 에러: {news.get('link')}, {e}")
                 news["content"] = None
             saved_count += 1
+        print(f"[크롤러] 본문 크롤링 후 전체 뉴스 샘플: {all_news[:5]}")
+        print(f"[크롤러] 본문 크롤링 후 content None 개수: {sum(1 for n in all_news if n['content'] is None)}")
 
         # 4. MongoDB 저장
         print(f"[크롤러] MongoDB 저장 시작: {saved_count}건")
