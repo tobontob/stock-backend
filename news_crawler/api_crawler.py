@@ -10,6 +10,7 @@ def fetch_api_news(query, api_key):
         "category": "business"  # 필요시 카테고리 지정
     }
     res = requests.get(url, params=params)
+    print("[크롤러] newsdata.io raw response:", res.text)  # 진단용 전체 응답 출력
     news_list = []
     if res.status_code == 200:
         data = res.json()
