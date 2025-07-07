@@ -14,6 +14,8 @@ db = client["news_db"]
 raw_col = db["raw_news"]
 result_col = db["analyzed_news"]
 
+print("=== 최신 코드 실행 중 ===")
+
 # KRX 상장종목목록 CSV 다운로드 (코스피+코스닥)
 url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download"
 response = requests.get(url)
