@@ -30,6 +30,7 @@ if __name__ == "__main__":
             api_news = fetch_api_news("증권", NEWS_API_KEY)
             print(f"[크롤러] API 뉴스 수집 완료: {len(api_news)}건")
             print(f"[크롤러] API 뉴스 샘플: {api_news[:2]}")
+            print(f"[크롤러] api_news 전체: {api_news}")
         except Exception as e:
             print(f"[크롤러] API 뉴스 수집 에러: {e}")
             api_news = []
@@ -38,6 +39,7 @@ if __name__ == "__main__":
         all_news = rss_news + api_news
         print(f"[크롤러] 전체 뉴스 합계: {len(all_news)}건")
         print(f"[크롤러] 전체 뉴스 샘플: {all_news[:2]}")
+        print(f"[크롤러] all_news 전체: {all_news}")
         saved_count = 0
         for news in all_news:
             try:
