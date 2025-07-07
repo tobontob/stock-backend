@@ -9,4 +9,5 @@ uvicorn
 fastapi
 python-dateutil
 pandas
-lxml 
+lxml
+html5lib 
