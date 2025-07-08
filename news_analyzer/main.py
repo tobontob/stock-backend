@@ -111,7 +111,8 @@ def process_news_batch(news_list, stock_list):
                 "sentiment": sentiment,
                 "published": news.get("published"),
                 "link": news.get("link"),
-                "related_stocks": related_stocks
+                "related_stocks": related_stocks,
+                "reason": sentiment.get("reason")  # 분석근거 필드 추가
             }
             result_col.replace_one({"_id": news["_id"]}, analyzed, upsert=True)
             print(f"분석 완료: {news.get('title')} → {sentiment}, 종목: {related_stocks}")

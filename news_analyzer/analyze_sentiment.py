@@ -17,7 +17,9 @@ def analyze_sentiment(text, max_retries=2):
             pred_id = int(torch.argmax(logits, dim=1))
             label = id2label[pred_id]
             score = probs[pred_id]
-        return {"label": label, "score": round(score, 4), "probs": probs}
+        # reason 생성: 가장 높은 확률의 감정과 신뢰도를 근거로 설명
+        reason = f"이 뉴스는 '{label}' 감정으로 분류되었으며, 신뢰도는 {round(score*100, 1)}% 입니다. (확률분포: {probs})"
+        return {"label": label, "score": round(score, 4), "probs": probs, "reason": reason}
     except Exception as e:
         print(f"[Sentiment ERROR] {e}")
-        return {"label": None, "score": None, "probs": None} 
+        return {"label": None, "score": None, "probs": None, "reason": "분석 실패"} 
