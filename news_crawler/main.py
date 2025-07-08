@@ -45,11 +45,25 @@ if __name__ == "__main__":
             print(f"[크롤러] Real-Time News Data API 뉴스 수집 에러: {e}")
         try:
             rss_urls = [
-                "https://www.mk.co.kr/rss/40300001/",
-                "https://news.naver.com/main/rss/rss.naver?sectionId=101",
-                "https://www.hankyung.com/feed/it",
-                "https://www.edaily.co.kr/rss/news.xml",
-                "https://www.yna.co.kr/rss/all",
+                "https://www.mk.co.kr/rss/40300001/",  # 매일경제
+                "https://news.naver.com/main/rss/rss.naver?sectionId=101",  # 네이버 경제
+                "https://www.hankyung.com/feed/it",  # 한국경제 IT
+                "https://www.edaily.co.kr/rss/news.xml",  # 이데일리
+                "https://www.yna.co.kr/rss/all",  # 연합뉴스 전체
+                "https://biz.chosun.com/site/data/rss/rss.xml",  # 조선비즈
+                "https://www.seoul.co.kr/rss/section010100.xml",  # 서울신문 경제
+                "https://www.fnnews.com/rss/fn_realnews.xml",  # 파이낸셜뉴스 실시간
+                "https://www.etnews.com/news/rss/rss.xml",  # 전자신문
+                "https://www.khan.co.kr/rss/rssdata/kh_economy.xml",  # 경향신문 경제
+                "https://www.hani.co.kr/rss/economy/",  # 한겨레 경제
+                "https://www.mt.co.kr/rss/rss1.xml",  # 머니투데이
+                "https://www.sedaily.com/rss/NewsList.xml",  # 서울경제
+                "https://www.heraldcorp.com/rss/010000000001.xml",  # 헤럴드경제
+                "https://www.munhwa.com/news/section_rss.html?sec=1010",  # 문화일보 경제
+                "https://www.kmib.co.kr/rss/rss.asp?sid=eco",  # 국민일보 경제
+                "https://www.dt.co.kr/rss/news.xml",  # 디지털타임스
+                "https://www.etoday.co.kr/rss/rss.xml",  # 이투데이
+                "https://www.sportsseoul.com/news/rss",  # 스포츠서울(경제)
                 # 필요시 추가
             ]
             api_news += fetch_rss_feed_news(rss_urls)
