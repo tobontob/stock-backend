@@ -38,22 +38,42 @@ if __name__ == "__main__":
         # 3. 본문 크롤링 및 정제 (content가 None이거나 'ONLY AVAILABLE IN PAID PLANS'이어도 저장 허용)
         all_news = rss_news + api_news
         print(f"[크롤러] 전체 뉴스 합계: {len(all_news)}건")
+        
+        # 중복 뉴스 제거 (링크 기준)
+        unique_news = {}
+        for news in all_news:
+            link = news.get("link")
+            if link and link not in unique_news:
+                unique_news[link] = news
+            elif not link:  # 링크가 없는 경우 제목으로 중복 체크
+                title = news.get("title")
+                if title and title not in [n.get("title") for n in unique_news.values()]:
+                    unique_news[f"no_link_{len(unique_news)}"] = news
+        
+        all_news = list(unique_news.values())
+        print(f"[크롤러] 중복 제거 후 뉴스: {len(all_news)}건")
+        
         print(f"[크롤러] 전체 뉴스 샘플: {all_news[:2]}")
         print(f"[크롤러] all_news 전체: {all_news}")
         saved_count = 0
+        content_success_count = 0
         for news in all_news:
             try:
                 content = fetch_news_content(news["link"])
                 clean_content = clean_news_content(content)
                 # newsdata.io 무료 플랜은 content가 'ONLY AVAILABLE IN PAID PLANS'일 수 있으므로, 이 경우에도 저장
-                if clean_content is not None:
+                if clean_content is not None and len(clean_content.strip()) > 50:
                     news["content"] = clean_content
+                    content_success_count += 1
+                    print(f"[크롤러] 본문 크롤링 성공: {news.get('title')} ({len(clean_content)}자)")
                 else:
                     news["content"] = news.get("content")  # 기존 content 유지(혹은 None)
+                    print(f"[크롤러] 본문 크롤링 실패: {news.get('title')}")
             except Exception as e:
                 print(f"[크롤러] 본문 크롤링 에러: {news.get('link')}, {e}")
                 news["content"] = news.get("content")  # 기존 content 유지(혹은 None)
             saved_count += 1
+        print(f"[크롤러] 본문 크롤링 성공률: {content_success_count}/{saved_count} ({content_success_count/saved_count*100:.1f}%)")
         print(f"[크롤러] 본문 크롤링 후 전체 뉴스 샘플: {all_news[:5]}")
         print(f"[크롤러] 본문 크롤링 후 content None 개수: {sum(1 for n in all_news if n['content'] is None)}")
         print(f"[크롤러] 본문 크롤링 후 'ONLY AVAILABLE IN PAID PLANS' 개수: {sum(1 for n in all_news if n.get('content') == 'ONLY AVAILABLE IN PAID PLANS')}")

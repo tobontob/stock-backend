@@ -6,11 +6,13 @@ import pandas as pd
 import requests
 from io import StringIO
 import re
+import time
+from datetime import datetime, timedelta
 
 load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
 
-client = MongoClient(MONGODB_URI)
+client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=30000, socketTimeoutMS=30000)
 db = client["news_db"]
 raw_col = db["raw_news"]
 result_col = db["analyzed_news"]
@@ -51,7 +53,7 @@ def extract_stocks_from_text(text, stock_list):
     for stock in stock_list:
         stock_name = stock["회사명"]
         # 정규표현식: 종목명이 단어 경계(띄어쓰기, 문장부호, 문장 끝 등)로 구분되어 있는지 확인
-        pattern = r'(\\b|\\s|^|[\\.,])' + re.escape(stock_name) + r'(\\b|\\s|$|[\\.,])'
+        pattern = r'(\b|\s|^|[.,])' + re.escape(stock_name) + r'(\b|\s|$|[.,])'
         if re.search(pattern, text):
             found.append({
                 "name": stock["회사명"],
@@ -79,24 +81,104 @@ def predict_direction(sentiment_label):
     else:
         return '중립'
 
-# 전체 뉴스 분석 및 종목/방향 예측
-for news in raw_col.find().sort("published", -1):
-    text = (news.get("content") or "") + " " + (news.get("title") or "")
-    if not text.strip():
-        continue
-    sentiment = analyze_sentiment(text)
-    related_stocks = extract_stocks_from_text(text, stock_list)
-    for stock in related_stocks:
-        stock["direction"] = predict_direction(sentiment['label'])
-    analyzed = {
-        "_id": news["_id"],
-        "title": news.get("title"),
-        "content": news.get("content"),
-        "sentiment": sentiment,
-        "published": news.get("published"),
-        "link": news.get("link"),
-        "related_stocks": related_stocks
-    }
-    result_col.replace_one({"_id": news["_id"]}, analyzed, upsert=True)
-    print(f"분석 완료: {news.get('title')} → {sentiment}, 종목: {related_stocks}")
-print("AI 감정분석+종목예측 파이프라인 완료") 
+def process_news_batch(news_list, stock_list):
+    """뉴스 배치를 처리하는 함수"""
+    processed_count = 0
+    for news in news_list:
+        try:
+            title = news.get("title") or ""
+            content = news.get("content") or ""
+            
+            # 본문이 있으면 본문을 우선 분석, 없으면 제목만 분석
+            if content and len(content.strip()) > 50:  # 본문이 50자 이상이면
+                text = content + " " + title  # 본문 + 제목
+                print(f"본문 분석: {len(content)}자 본문 + 제목")
+            else:
+                text = title  # 제목만
+                print(f"제목만 분석: {len(title)}자 제목")
+            
+            if not text.strip():
+                continue
+                
+            sentiment = analyze_sentiment(text)
+            related_stocks = extract_stocks_from_text(text, stock_list)
+            for stock in related_stocks:
+                stock["direction"] = predict_direction(sentiment['label'])
+            analyzed = {
+                "_id": news["_id"],
+                "title": news.get("title"),
+                "content": news.get("content"),
+                "sentiment": sentiment,
+                "published": news.get("published"),
+                "link": news.get("link"),
+                "related_stocks": related_stocks
+            }
+            result_col.replace_one({"_id": news["_id"]}, analyzed, upsert=True)
+            print(f"분석 완료: {news.get('title')} → {sentiment}, 종목: {related_stocks}")
+            processed_count += 1
+            
+        except Exception as e:
+            print(f"뉴스 처리 중 오류 발생: {news.get('title', 'Unknown')} - {e}")
+            continue
+    
+    return processed_count
+
+# 전체 뉴스 분석 및 종목/방향 예측 (배치 처리)
+print("뉴스 분석 시작...")
+
+# 최근 2일 이내 뉴스만 분석 (날짜 필터링)
+recent_time = datetime.utcnow() - timedelta(days=2)
+print(f"분석 대상 기간: 최근 2일 ({recent_time} ~ 현재)")
+
+# 이미 분석된 뉴스 ID 목록 가져오기
+print("이미 분석된 뉴스 확인 중...")
+already_analyzed_ids = set(doc["_id"] for doc in result_col.find({}, {"_id": 1}))
+print(f"이미 분석된 뉴스: {len(already_analyzed_ids)}개")
+
+# 분석 대상 뉴스만 추출 (이미 분석된 것 제외, 최근 2일 이내)
+target_news_cursor = raw_col.find({
+    "_id": {"$nin": list(already_analyzed_ids)},
+    "published": {"$gte": recent_time}
+}).sort("published", -1).limit(100)
+target_news_list = list(target_news_cursor)
+
+print(f"분석 대상 뉴스: {len(target_news_list)}개")
+
+if len(target_news_list) == 0:
+    print("분석할 새로운 뉴스가 없습니다.")
+    exit()
+
+max_retries = 3
+batch_size = 10  # 한 번에 처리할 뉴스 수
+
+for attempt in range(max_retries):
+    try:
+        # 배치 단위로 뉴스를 처리
+        news_batch = []
+        
+        for news in target_news_list:
+            news_batch.append(news)
+            if len(news_batch) >= batch_size:
+                print(f"배치 처리 중... ({len(news_batch)}개)")
+                processed = process_news_batch(news_batch, stock_list)
+                print(f"배치 완료: {processed}개 처리됨")
+                news_batch = []
+                time.sleep(1)  # 1초 대기
+        
+        # 남은 뉴스 처리
+        if news_batch:
+            print(f"마지막 배치 처리 중... ({len(news_batch)}개)")
+            processed = process_news_batch(news_batch, stock_list)
+            print(f"마지막 배치 완료: {processed}개 처리됨")
+        
+        print("AI 감정분석+종목예측 파이프라인 완료")
+        break
+        
+    except Exception as e:
+        print(f"시도 {attempt + 1}/{max_retries} 실패: {e}")
+        if attempt < max_retries - 1:
+            print("5초 후 재시도...")
+            time.sleep(5)
+        else:
+            print("최대 재시도 횟수 초과. 분석을 중단합니다.")
+            raise e 

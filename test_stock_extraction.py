@@ -28,7 +28,7 @@ def extract_stocks_from_text(text, stock_list):
     for stock in stock_list:
         stock_name = stock["회사명"]
         # 정규표현식: 종목명이 단어 경계(띄어쓰기, 문장부호, 문장 끝 등)로 구분되어 있는지 확인
-        pattern = r'(\\b|\\s|^|[\\.,])' + re.escape(stock_name) + r'(\\b|\\s|$|[\\.,])'
+        pattern = r'(\b|\s|^|[.,])' + re.escape(stock_name) + r'(\b|\s|$|[.,])'
         if re.search(pattern, text):
             found.append({
                 "name": stock["회사명"],
