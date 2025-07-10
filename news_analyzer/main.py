@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 import csv
 import glob
+from explain_util import generate_explanation
 
 load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -199,7 +200,20 @@ def process_news_batch(news_list, stock_list):
                 if keywords_list:
                     sentiment_keyword_info.append(f"{sentiment_type}: {', '.join(keywords_list)}")
             
-            reason = f"[결합분석] {reason_detail} (감정분석: {sentiment['reason']}, 키워드: {', '.join(keywords) if keywords else '없음'}, 감성사전 점수: {senti_score}, 금융키워드: {'; '.join(financial_keyword_info) if financial_keyword_info else '없음'}, 감정키워드: {'; '.join(sentiment_keyword_info) if sentiment_keyword_info else '없음'}, 영향도점수: {impact_score})"
+            # === 설명형 분석근거 생성 ===
+            if related_stocks:
+                main_stock = related_stocks[0]
+                company_name = main_stock["name"]
+                industry = main_stock["sector"] if main_stock.get("sector") else "전 업종"
+            else:
+                company_name = "해당없음"
+                industry = "전 업종"
+            explanation = generate_explanation(text, company_name, industry)
+            
+            reason = ""
+            if explanation:
+                reason += f"[설명형 분석근거] {explanation}\n"
+            reason += f"[결합분석] {reason_detail} (감정분석: {sentiment['reason']}, 키워드: {', '.join(keywords) if keywords else '없음'}, 감성사전 점수: {senti_score}, 금융키워드: {'; '.join(financial_keyword_info) if financial_keyword_info else '없음'}, 감정키워드: {'; '.join(sentiment_keyword_info) if sentiment_keyword_info else '없음'}, 영향도점수: {impact_score})"
             analyzed = {
                 "_id": news["_id"],
                 "title": news.get("title"),
