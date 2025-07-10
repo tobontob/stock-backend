@@ -28,6 +28,17 @@ ARTICLE_SELECTORS = {
     # 필요시 추가
 }
 
+UNWANTED_SELECTORS = [
+    '.relate_news', '.popular_news', '.ad_section', '.news_list', '.news_more', '.news-aside',
+    '.article-aside', '.article_relation', '.article_recommend', '.article_bottom', '.article_comment',
+    '.article_footer', '.copyright', '.sns_area', '.tag_area', '.recommend', '.related', '.relation_news',
+    '.news_link', '.news_sponsor', '.news_copyright', '.news_ad', '.ad_box', '.ad', '.banner',
+    '#relate_news', '#popular_news', '#ad_section', '#news_list', '#news_more', '#news-aside',
+    '#article-aside', '#article_relation', '#article_recommend', '#article_bottom', '#article_comment',
+    '#article_footer', '#copyright', '#sns_area', '#tag_area', '#recommend', '#related', '#relation_news',
+    '#news_link', '#news_sponsor', '#news_copyright', '#news_ad', '#ad_box', '#ad', '#banner'
+]
+
 def get_domain(url):
     return urlparse(url).netloc.replace('www.', '')
 
@@ -42,7 +53,13 @@ def fetch_article_content(url):
         for selector in selectors:
             content = soup.select_one(selector)
             if content and len(content.get_text(strip=True)) > 50:
-                return content.get_text(separator=' ', strip=True)
+                # 불필요한 하위 영역 제거
+                for unwanted in UNWANTED_SELECTORS:
+                    for tag in content.select(unwanted):
+                        tag.decompose()
+                text = content.get_text(separator=' ', strip=True)
+                if len(text) > 50:
+                    return text
         # fallback: 가장 긴 div/p
         candidates = []
         for tag in soup.find_all(['div', 'p']):
