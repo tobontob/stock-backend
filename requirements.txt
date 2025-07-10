@@ -11,3 +11,5 @@ python-dateutil
 pandas
 lxml
 html5lib 
+konlpy
+jinja2 
