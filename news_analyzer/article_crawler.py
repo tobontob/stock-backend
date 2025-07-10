@@ -39,6 +39,18 @@ UNWANTED_SELECTORS = [
     '#news_link', '#news_sponsor', '#news_copyright', '#news_ad', '#ad_box', '#ad', '#banner'
 ]
 
+MARKERS = [
+    '관련기사', '함께 본 기사', '인기기사', '추천기사', '주요뉴스', '많이 본 뉴스', '연관기사', '함께보는 기사',
+    '댓글', '댓글쓰기', '댓글을 남겨주세요', '의견쓰기'
+]
+
+def clean_article_text(text):
+    for marker in MARKERS:
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx]
+    return text
+
 def get_domain(url):
     return urlparse(url).netloc.replace('www.', '')
 
@@ -58,12 +70,14 @@ def fetch_article_content(url):
                     for tag in content.select(unwanted):
                         tag.decompose()
                 text = content.get_text(separator=' ', strip=True)
+                text = clean_article_text(text)  # 댓글 등 마커 이후 제거
                 if len(text) > 50:
                     return text
         # fallback: 가장 긴 div/p
         candidates = []
         for tag in soup.find_all(['div', 'p']):
             text = tag.get_text(separator=' ', strip=True)
+            text = clean_article_text(text)
             if len(text) > 100:
                 candidates.append((len(text), text))
         if candidates:
