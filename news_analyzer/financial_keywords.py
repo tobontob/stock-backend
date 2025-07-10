@@ -408,44 +408,178 @@ class FinancialKeywordLoader:
         return self.impact_rules
     
     def extract_financial_keywords_from_text(self, text: str) -> Dict[str, List[str]]:
-        """텍스트에서 금융 키워드 추출"""
-        found_keywords = {category: [] for category in self.financial_keywords.keys()}
+        """텍스트에서 금융 키워드 추출 (문맥 기반 가중치 적용)"""
+        result = {}
         
         for category, keywords in self.financial_keywords.items():
-            for keyword in keywords.keys():
+            found_keywords = []
+            for keyword, base_weight in keywords.items():
                 if keyword in text:
-                    found_keywords[category].append(keyword)
+                    # 문맥 기반 가중치 계산
+                    contextual_weight = self._calculate_contextual_weight(keyword, text)
+                    final_weight = base_weight * contextual_weight
+                    
+                    if final_weight >= 50:  # 최소 임계값
+                        found_keywords.append({
+                            'keyword': keyword,
+                            'weight': final_weight,
+                            'base_weight': base_weight,
+                            'contextual_weight': contextual_weight
+                        })
+            
+            # 가중치 순으로 정렬
+            found_keywords.sort(key=lambda x: x['weight'], reverse=True)
+            result[category] = [item['keyword'] for item in found_keywords[:10]]  # 상위 10개만
         
-        return found_keywords
+        return result
+    
+    def _calculate_contextual_weight(self, keyword: str, text: str) -> float:
+        """문맥 기반 가중치 계산"""
+        weight = 1.0
+        
+        # 위치별 가중치
+        if keyword in text[:200]:  # 제목/첫문단
+            weight *= 1.5
+        elif keyword in text[:500]:  # 앞부분
+            weight *= 1.2
+        
+        # 반복 빈도
+        frequency = text.count(keyword)
+        if frequency > 3:
+            weight *= 1.3
+        elif frequency > 1:
+            weight *= 1.1
+        
+        # 관련 키워드와의 동반 출현
+        related_keywords = self._get_related_keywords(keyword)
+        for related in related_keywords:
+            if related in text:
+                weight *= 1.2
+                break
+        
+        # 부정어와의 동반 출현 (가중치 감소)
+        negative_words = ['감소', '하락', '악화', '위축', '축소', '실패', '손실', '적자']
+        for neg_word in negative_words:
+            if neg_word in text and keyword in text:
+                weight *= 0.8
+                break
+        
+        return min(weight, 2.0)  # 최대 2배까지만
+    
+    def _get_related_keywords(self, keyword: str) -> List[str]:
+        """관련 키워드 반환"""
+        related_map = {
+            '주가': ['상승', '하락', '급등', '급락', '돌파', '지지'],
+            '실적': ['매출', '영업이익', '당기순이익', '성장', '개선'],
+            '투자': ['확대', '증가', '성장', '개발', 'R&D'],
+            'M&A': ['합병', '인수', '분할', '스핀오프', '전략'],
+            '금리': ['인상', '인하', '동결', '변동', '정책'],
+            '환율': ['상승', '하락', '강세', '약세', '변동']
+        }
+        
+        for main_keyword, related_list in related_map.items():
+            if keyword in related_list or keyword == main_keyword:
+                return related_list
+        
+        return []
     
     def extract_sentiment_keywords_from_text(self, text: str) -> Dict[str, List[str]]:
-        """텍스트에서 감정 키워드 추출"""
-        found_sentiments = {sentiment: [] for sentiment in self.sentiment_keywords.keys()}
+        """텍스트에서 감정 키워드 추출 (개선된 버전)"""
+        result = {}
         
         for sentiment, keywords in self.sentiment_keywords.items():
-            for keyword in keywords.keys():
+            found_keywords = []
+            for keyword, weight in keywords.items():
                 if keyword in text:
-                    found_sentiments[sentiment].append(keyword)
+                    # 문맥 기반 가중치 적용
+                    contextual_weight = self._calculate_sentiment_contextual_weight(keyword, text, sentiment)
+                    final_weight = weight * contextual_weight
+                    
+                    if final_weight >= 30:  # 감정 키워드는 더 낮은 임계값
+                        found_keywords.append({
+                            'keyword': keyword,
+                            'weight': final_weight,
+                            'sentiment': sentiment
+                        })
+            
+            # 가중치 순으로 정렬
+            found_keywords.sort(key=lambda x: x['weight'], reverse=True)
+            result[sentiment] = [item['keyword'] for item in found_keywords[:5]]  # 상위 5개만
         
-        return found_sentiments
+        return result
+    
+    def _calculate_sentiment_contextual_weight(self, keyword: str, text: str, sentiment: str) -> float:
+        """감정 키워드의 문맥 기반 가중치 계산"""
+        weight = 1.0
+        
+        # 감정 강화어와의 동반 출현
+        intensifiers = {
+            'positive': ['매우', '극도로', '대폭', '급격히', '크게'],
+            'negative': ['심각하게', '대폭', '급격히', '크게', '매우'],
+            'neutral': ['약간', '소폭', '미미하게', '조금']
+        }
+        
+        for intensifier in intensifiers.get(sentiment, []):
+            if intensifier in text and keyword in text:
+                weight *= 1.3
+                break
+        
+        # 부정어와의 동반 출현 (반대 감정으로 전환)
+        if sentiment == 'positive':
+            neg_words = ['아니', '하지 않', '없', '실패', '실패']
+            for neg_word in neg_words:
+                if neg_word in text and keyword in text:
+                    weight *= 0.5  # 긍정 키워드가 부정어와 함께 있으면 가중치 감소
+                    break
+        
+        return min(weight, 1.5)
     
     def get_impact_score(self, text: str) -> Dict[str, float]:
-        """텍스트의 영향도 점수 계산"""
-        sentiment_keywords = self.extract_sentiment_keywords_from_text(text)
+        """개선된 영향도 점수 계산"""
+        # 기존 영향도 점수
+        base_score = super().get_impact_score(text)
         
-        positive_count = len(sentiment_keywords.get('positive', []))
-        negative_count = len(sentiment_keywords.get('negative', []))
-        neutral_count = len(sentiment_keywords.get('neutral', []))
-        
-        total = positive_count + negative_count + neutral_count
-        if total == 0:
-            return {'positive': 0.0, 'negative': 0.0, 'neutral': 0.0}
-        
-        return {
-            'positive': positive_count / total,
-            'negative': negative_count / total,
-            'neutral': neutral_count / total
+        # 추가적인 영향도 지표들
+        additional_indicators = {
+            'urgency': self._calculate_urgency_score(text),
+            'volatility': self._calculate_volatility_score(text),
+            'market_impact': self._calculate_market_impact_score(text),
+            'sector_specificity': self._calculate_sector_specificity_score(text)
         }
+        
+        # 종합 영향도 점수
+        total_score = base_score.get('total', 0.0)
+        for indicator, score in additional_indicators.items():
+            total_score += score * 0.2  # 각 지표는 20% 가중치
+        
+        base_score.update(additional_indicators)
+        base_score['total'] = min(total_score, 1.0)  # 최대 1.0
+        
+        return base_score
+    
+    def _calculate_urgency_score(self, text: str) -> float:
+        """긴급성 점수 계산"""
+        urgency_keywords = ['긴급', '즉시', '당장', '지금', '빨리', '서둘러', '급히']
+        urgency_count = sum(1 for keyword in urgency_keywords if keyword in text)
+        return min(urgency_count * 0.1, 0.5)
+    
+    def _calculate_volatility_score(self, text: str) -> float:
+        """변동성 점수 계산"""
+        volatility_keywords = ['급등', '급락', '급변', '급격', '대폭', '급증', '급감']
+        volatility_count = sum(1 for keyword in volatility_keywords if keyword in text)
+        return min(volatility_count * 0.15, 0.6)
+    
+    def _calculate_market_impact_score(self, text: str) -> float:
+        """시장 영향도 점수 계산"""
+        market_keywords = ['시장', '코스피', '코스닥', '종합지수', '지수', '시장지배력']
+        market_count = sum(1 for keyword in market_keywords if keyword in text)
+        return min(market_count * 0.1, 0.4)
+    
+    def _calculate_sector_specificity_score(self, text: str) -> float:
+        """섹터 특화 점수 계산"""
+        sector_keywords = ['반도체', '바이오', '자동차', '게임', '금융', '건설', '화학']
+        sector_count = sum(1 for keyword in sector_keywords if keyword in text)
+        return min(sector_count * 0.12, 0.5)
 
 # 전역 인스턴스
 financial_keyword_loader = FinancialKeywordLoader() 

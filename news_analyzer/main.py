@@ -49,28 +49,121 @@ print(f"\n=== 종목명 예시 (처음 10개) ===")
 stock_names = [stock['회사명'] for stock in stock_list[:10]]
 print(stock_names)
 
+# 종목 추출 관련 설정 추가
+STOCK_EXTRACTION_CONFIG = {
+    "max_title_length": 200,  # 제목에서 추출할 최대 길이
+    "max_content_length": 500,  # 본문에서 추출할 최대 길이 (앞부분)
+    "min_confidence": 0.6,  # 최소 신뢰도
+    "blacklist": [
+        "삼성전자", "LG전자", "현대차", "기아", "SK하이닉스",  # 너무 일반적인 종목들
+        "카카오", "네이버", "쿠팡", "배달의민족",  # IT 대기업들
+        "삼성생명", "교보생명", "한화생명",  # 보험사들
+        "신한은행", "KB국민은행", "우리은행", "하나은행",  # 은행들
+    ],
+    "whitelist": {
+        # 특정 업종에서 중요한 종목들
+        "반도체": ["SK하이닉스", "삼성전자", "DB하이텍", "한미반도체"],
+        "바이오": ["셀트리온", "삼성바이오로직스", "한미약품"],
+        "자동차": ["현대차", "기아", "현대모비스", "LG화학"],
+        "게임": ["넥슨", "넷마블", "크래프톤", "펄어비스"],
+    }
+}
+
+def is_contextually_relevant(stock_name, text, position):
+    """문맥적으로 관련성이 있는지 확인"""
+    # 제목에 있으면 높은 우선순위
+    if position == "title":
+        return True
+    
+    # 본문 앞부분에 있으면 중간 우선순위
+    if position == "content_front":
+        return True
+    
+    # 본문 중간/뒤부분은 낮은 우선순위 (단, 특정 키워드와 함께 있으면 높은 우선순위)
+    if position == "content_middle":
+        # 금융 관련 키워드와 함께 있으면 우선순위 높임
+        financial_keywords = ["주가", "주식", "투자", "매수", "매도", "상승", "하락", "실적", "매출", "이익"]
+        for keyword in financial_keywords:
+            if keyword in text and stock_name in text:
+                return True
+        return False
+    
+    return False
+
 def extract_stocks_from_text(text, stock_list):
     found = []
     print(f"\n=== 종목 추출 디버그 ===")
     print(f"뉴스 텍스트 길이: {len(text)}")
     print(f"뉴스 텍스트 일부: {text[:200]}...")
 
+    # 텍스트를 제목과 본문으로 분리 (간단한 추정)
+    title_part = text[:STOCK_EXTRACTION_CONFIG["max_title_length"]]
+    content_part = text[STOCK_EXTRACTION_CONFIG["max_title_length"]:STOCK_EXTRACTION_CONFIG["max_title_length"] + STOCK_EXTRACTION_CONFIG["max_content_length"]]
+    
     for stock in stock_list:
         stock_name = stock["회사명"]
-        # 정규표현식: 종목명이 단어 경계(띄어쓰기, 문장부호, 문장 끝 등)로 구분되어 있는지 확인
+        
+        # 블랙리스트 체크
+        if stock_name in STOCK_EXTRACTION_CONFIG["blacklist"]:
+            continue
+        
+        # 정규표현식: 종목명이 단어 경계로 구분되어 있는지 확인
         pattern = r'(\b|\s|^|[.,])' + re.escape(stock_name) + r'(\b|\s|$|[.,])'
-        if re.search(pattern, text):
+        
+        # 제목에서 검색
+        if re.search(pattern, title_part):
             found.append({
                 "name": stock["회사명"],
                 "code": stock["종목코드"],
-                "sector": stock["업종"]
+                "sector": stock["업종"],
+                "position": "title",
+                "confidence": 0.9
             })
-            print(f"  ✓ 종목 발견: {stock['회사명']} ({stock['종목코드']})")
+            print(f"  ✓ 제목에서 종목 발견: {stock['회사명']} ({stock['종목코드']})")
+            continue
+        
+        # 본문 앞부분에서 검색
+        if re.search(pattern, content_part):
+            found.append({
+                "name": stock["회사명"],
+                "code": stock["종목코드"],
+                "sector": stock["업종"],
+                "position": "content_front",
+                "confidence": 0.7
+            })
+            print(f"  ✓ 본문 앞부분에서 종목 발견: {stock['회사명']} ({stock['종목코드']})")
+            continue
+        
+        # 전체 텍스트에서 검색 (낮은 우선순위)
+        if re.search(pattern, text):
+            # 문맥적 관련성 확인
+            if is_contextually_relevant(stock_name, text, "content_middle"):
+                found.append({
+                    "name": stock["회사명"],
+                    "code": stock["종목코드"],
+                    "sector": stock["업종"],
+                    "position": "content_middle",
+                    "confidence": 0.5
+                })
+                print(f"  ✓ 본문 중간에서 종목 발견: {stock['회사명']} ({stock['종목코드']})")
+            else:
+                found.append({
+                    "name": stock["회사명"],
+                    "code": stock["종목코드"],
+                    "sector": stock["업종"],
+                    "position": "content_other",
+                    "confidence": 0.3
+                })
+                print(f"  ✓ 본문 기타에서 종목 발견: {stock['회사명']} ({stock['종목코드']})")
 
-    # 중복 제거
+    # 신뢰도 기반 필터링 및 정렬
+    filtered_found = [stock for stock in found if stock["confidence"] >= STOCK_EXTRACTION_CONFIG["min_confidence"]]
+    filtered_found.sort(key=lambda x: x["confidence"], reverse=True)
+    
+    # 중복 제거 (높은 신뢰도 우선)
     unique_found = []
     seen_names = set()
-    for stock in found:
+    for stock in filtered_found:
         if stock["name"] not in seen_names:
             unique_found.append(stock)
             seen_names.add(stock["name"])
@@ -190,8 +283,56 @@ def process_news_batch(news_list, stock_list):
             impact_score = financial_keyword_loader.get_impact_score(text)
             
             related_stocks = extract_stocks_from_text(text, stock_list)
+            
+            # === 설명형 분석근거 생성 (개선된 버전) ===
+            if related_stocks:
+                main_stock = related_stocks[0]
+                company_name = main_stock["name"]
+                industry = main_stock["sector"] if main_stock.get("sector") else "전 업종"
+            else:
+                company_name = "해당없음"
+                industry = "전 업종"
+            
+            # 감정에 따른 설명 생성
+            sentiment_label = sentiment['label']
+            explanation = generate_explanation(text, company_name, industry)
+            
+            # 다중 관점 설명 생성 (새로운 기능)
+            from explain_util import generate_multi_perspective_explanation, enhance_explanation_with_data
+            
+            multi_explanations = generate_multi_perspective_explanation(
+                text, company_name, industry, sentiment_label
+            )
+            
+            # 추가 데이터로 설명 강화
+            additional_data = {
+                'sentiment_score': sentiment.get('score', 0),
+                'keyword_count': len(financial_keywords.get('stock_keywords', [])) + len(sentiment_keywords.get('positive', [])) + len(sentiment_keywords.get('negative', []))
+            }
+            
+            enhanced_explanation = enhance_explanation_with_data(explanation, additional_data)
+            
+            # 종목별 방향 예측 개선
             for stock in related_stocks:
-                stock["direction"] = predict_direction(sentiment['label'])
+                # 신뢰도 기반 방향 예측
+                confidence = stock.get("confidence", 0.5)
+                if confidence > 0.8:
+                    stock["direction"] = predict_direction(sentiment['label'])
+                    stock["confidence_level"] = "높음"
+                elif confidence > 0.6:
+                    stock["direction"] = predict_direction(sentiment['label'])
+                    stock["confidence_level"] = "보통"
+                else:
+                    stock["direction"] = "중립"
+                    stock["confidence_level"] = "낮음"
+                
+                # 종목별 상세 정보 추가
+                stock["analysis_details"] = {
+                    "position": stock.get("position", "unknown"),
+                    "sentiment_score": sentiment.get('score', 0),
+                    "financial_keywords": len(financial_keywords.get('stock_keywords', [])),
+                    "sentiment_keywords": len(sentiment_keywords.get('positive', [])) + len(sentiment_keywords.get('negative', []))
+                }
             
             # --- 키워드 추출 및 결합분석 ---
             keywords = extract_impact_keywords(text, IMPACT_RULES)
@@ -208,20 +349,15 @@ def process_news_batch(news_list, stock_list):
                 if keywords_list:
                     sentiment_keyword_info.append(f"{sentiment_type}: {', '.join(keywords_list)}")
             
-            # === 설명형 분석근거 생성 ===
-            if related_stocks:
-                main_stock = related_stocks[0]
-                company_name = main_stock["name"]
-                industry = main_stock["sector"] if main_stock.get("sector") else "전 업종"
-            else:
-                company_name = "해당없음"
-                industry = "전 업종"
-            explanation = generate_explanation(text, company_name, industry)
-            
             reason = ""
-            if explanation:
-                reason += f"[설명형 분석근거] {explanation}\n"
+            if enhanced_explanation:
+                reason += f"[설명형 분석근거] {enhanced_explanation}\n"
             reason += f"[결합분석] {reason_detail} (감정분석: {sentiment['reason']}, 키워드: {', '.join(keywords) if keywords else '없음'}, 감성사전 점수: {senti_score}, 금융키워드: {'; '.join(financial_keyword_info) if financial_keyword_info else '없음'}, 감정키워드: {'; '.join(sentiment_keyword_info) if sentiment_keyword_info else '없음'}, 영향도점수: {impact_score})"
+            
+            # 다중 관점 설명 추가
+            if multi_explanations:
+                reason += f"\n[다중관점분석] 시장관점: {multi_explanations.get('market', 'N/A')}, 업종관점: {multi_explanations.get('sector', 'N/A')}, 트렌드관점: {multi_explanations.get('trend', 'N/A')}"
+            
             analyzed = {
                 "_id": news["_id"],
                 "title": news.get("title"),
@@ -235,7 +371,14 @@ def process_news_batch(news_list, stock_list):
                 "link": news.get("link"),
                 "related_stocks": related_stocks,
                 "reason": reason,  # 결합분석 근거
-                "final_label": final_label  # 결합분석 최종 방향
+                "final_label": final_label,  # 결합분석 최종 방향
+                "multi_perspective_analysis": multi_explanations,  # 다중 관점 분석
+                "analysis_quality": {
+                    "sentiment_confidence": sentiment.get('score', 0),
+                    "keyword_diversity": len(financial_keywords.get('stock_keywords', [])),
+                    "stock_extraction_confidence": related_stocks[0].get("confidence", 0) if related_stocks else 0,
+                    "explanation_quality": len(enhanced_explanation) if enhanced_explanation else 0
+                }
             }
             result_col.replace_one({"_id": news["_id"]}, analyzed, upsert=True)
             print(f"분석 완료: {news.get('title')} → {sentiment}, 감성사전: {senti_score}, 종목: {related_stocks}, 결합분석: {final_label}, 근거: {reason}")
