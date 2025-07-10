@@ -1,14 +1,12 @@
 import pandas as pd
 from jinja2 import Template
-from konlpy.tag import Okt
 
 desc_db = pd.read_csv('keyword_explain.csv')
 tmpl = Template("{{company}}의 {{keyword}}는 {{desc}}으로, {{impact}}적 요인입니다.")
 
 def extract_keywords(text, db_keywords):
-    okt = Okt()
-    nouns = set(okt.nouns(text))
-    return [kw for kw in db_keywords if kw in nouns]
+    # 형태소 분석 없이 단순 포함 체크
+    return [kw for kw in db_keywords if kw in text]
 
 def generate_explanation(news_text, company_name, industry):
     db_keywords = desc_db['키워드'].tolist()
