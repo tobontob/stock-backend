@@ -113,17 +113,36 @@ def decide_final_label(sentiment, keywords, rules, title, content):
 
 # KNU 감성사전 txt 파일을 pandas로 불러와 긍/부정 단어 세트로 만드는 코드 (자동 경로 탐색)
 def load_knu_sentilex():
-    # src, data 등 하위 폴더에서 SentiWord_Dict.txt 파일 자동 탐색
-    candidates = glob.glob('KnuSentiLex*/**/SentiWord_Dict.txt', recursive=True)
+    # 여러 경로에서 SentiWord_Dict.txt 파일 자동 탐색
+    search_paths = [
+        'SentiWord_Dict.txt',  # 현재 디렉토리
+        '../SentiWord_Dict.txt',  # 상위 디렉토리
+        '../../SentiWord_Dict.txt',  # 상위 상위 디렉토리
+        'KnuSentiLex*/**/SentiWord_Dict.txt',  # KnuSentiLex 폴더 내
+        '**/SentiWord_Dict.txt'  # 모든 하위 폴더
+    ]
+    
+    candidates = []
+    for pattern in search_paths:
+        if '*' in pattern:
+            candidates.extend(glob.glob(pattern, recursive=True))
+        else:
+            if os.path.exists(pattern):
+                candidates.append(pattern)
+    
     if not candidates:
         print('[감성사전 경고] SentiWord_Dict.txt 파일을 찾을 수 없습니다.')
         return set(), set()
+    
     path = candidates[0]
+    print(f'[감성사전] 파일 발견: {path}')
+    
     try:
-        df = pd.read_csv(path, sep='\t', encoding='utf-8')
+        # 헤더가 없는 형식이므로 컬럼명을 직접 지정
+        df = pd.read_csv(path, sep='\t', encoding='utf-8', header=None, names=['word', 'polarity'])
         pos_words = set(df[df['polarity'] > 0]['word'])
         neg_words = set(df[df['polarity'] < 0]['word'])
-        print(f'[감성사전] 긍정 {len(pos_words)}개, 부정 {len(neg_words)}개 단어 로딩 (경로: {path})')
+        print(f'[감성사전] 긍정 {len(pos_words)}개, 부정 {len(neg_words)}개 단어 로딩 완료')
         return pos_words, neg_words
     except Exception as e:
         print(f'[감성사전 로딩 오류] {e}')
@@ -207,23 +226,34 @@ def process_news_batch(news_list, stock_list):
 # 전체 뉴스 분석 및 종목/방향 예측 (배치 처리)
 print("뉴스 분석 시작...")
 
-# 최근 2일 이내 뉴스만 분석 (날짜 필터링)
-recent_time = datetime.utcnow() - timedelta(days=2)
-print(f"분석 대상 기간: 최근 2일 ({recent_time} ~ 현재)")
+# 최근 7일 이내 뉴스만 분석 (날짜 필터링 확장)
+recent_time = datetime.utcnow() - timedelta(days=7)
+print(f"분석 대상 기간: 최근 7일 ({recent_time} ~ 현재)")
 
-# 이미 분석된 뉴스 ID 목록 가져오기
-print("이미 분석된 뉴스 확인 중...")
-already_analyzed_ids = set(doc["_id"] for doc in result_col.find({}, {"_id": 1}))
-print(f"이미 분석된 뉴스: {len(already_analyzed_ids)}개")
+# 강제 재분석 옵션 (환경변수로 제어)
+FORCE_REANALYZE = os.getenv("FORCE_REANALYZE", "false").lower() == "true"
 
-# 분석 대상 뉴스만 추출 (이미 분석된 것 제외, 최근 2일 이내)
-target_news_cursor = raw_col.find({
-    "_id": {"$nin": list(already_analyzed_ids)},
-    "published": {"$gte": recent_time}
-}).sort("published", -1).limit(100)
-target_news_list = list(target_news_cursor)
+if FORCE_REANALYZE:
+    print("⚠️ 강제 재분석 모드 활성화 - 모든 뉴스를 재분석합니다.")
+    target_news_cursor = raw_col.find({
+        "published": {"$gte": recent_time}
+    }).sort("published", -1).limit(100)
+    target_news_list = list(target_news_cursor)
+    print(f"재분석 대상 뉴스: {len(target_news_list)}개")
+else:
+    # 이미 분석된 뉴스 ID 목록 가져오기
+    print("이미 분석된 뉴스 확인 중...")
+    already_analyzed_ids = set(doc["_id"] for doc in result_col.find({}, {"_id": 1}))
+    print(f"이미 분석된 뉴스: {len(already_analyzed_ids)}개")
 
-print(f"분석 대상 뉴스: {len(target_news_list)}개")
+    # 분석 대상 뉴스만 추출 (이미 분석된 것 제외, 최근 7일 이내)
+    target_news_cursor = raw_col.find({
+        "_id": {"$nin": list(already_analyzed_ids)},
+        "published": {"$gte": recent_time}
+    }).sort("published", -1).limit(100)
+    target_news_list = list(target_news_cursor)
+
+    print(f"분석 대상 뉴스: {len(target_news_list)}개")
 
 if len(target_news_list) == 0:
     print("분석할 새로운 뉴스가 없습니다.")
