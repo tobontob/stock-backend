@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import csv
 import glob
 from explain_util import generate_explanation
+from article_crawler import fetch_article_content
 
 load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -166,6 +167,13 @@ def process_news_batch(news_list, stock_list):
         try:
             title = news.get("title") or ""
             content = news.get("content") or ""
+            # 본문이 없거나 너무 짧으면 링크에서 실시간 크롤링 시도
+            if not content or len(content.strip()) < 50:
+                link = news.get("link")
+                if link:
+                    crawled_content = fetch_article_content(link)
+                    if crawled_content and len(crawled_content.strip()) > 50:
+                        content = crawled_content
             if content and len(content.strip()) > 50:
                 text = content + " " + title
             else:
