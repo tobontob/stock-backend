@@ -2,12 +2,15 @@ import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from analyze_sentiment import analyze_sentiment
+from financial_keywords import financial_keyword_loader
 import pandas as pd
 import requests
 from io import StringIO
 import re
 import time
 from datetime import datetime, timedelta
+import csv
+import glob
 
 load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -81,6 +84,61 @@ def predict_direction(sentiment_label):
     else:
         return '중립'
 
+# 1. 경제적 영향 룰셋 정의 (파일 상단에 추가)
+IMPACT_RULES = financial_keyword_loader.get_impact_rules()
+
+# 2. 키워드 추출 함수 (파일 상단에 추가)
+def extract_impact_keywords(text, rules):
+    found = []
+    for keyword in rules.keys():
+        if keyword in text:
+            found.append(keyword)
+    return found
+
+# 3. 결합 분석 로직 (파일 상단에 추가)
+def decide_final_label(sentiment, keywords, rules, title, content):
+    impacts = [rules[k] for k in keywords]
+    important_keywords = [k for k in keywords if k in title or k in content[:100]]
+    if important_keywords:
+        if "부정적" in [rules[k] for k in important_keywords]:
+            return "부정적", f"핵심 키워드({', '.join(important_keywords)})가 기사 제목/첫문단에 등장하여 부정적 영향이 우선됩니다."
+        elif "긍정적" in [rules[k] for k in important_keywords]:
+            return "긍정적", f"핵심 키워드({', '.join(important_keywords)})가 기사 제목/첫문단에 등장하여 긍정적 영향이 우선됩니다."
+    if sentiment['score'] and sentiment['score'] > 0.8:
+        return sentiment['label'], f"감정분석 신뢰도가 높아 감정분석 결과({sentiment['label']})를 우선합니다."
+    for k in keywords:
+        if content.count(k) > 2:
+            return rules[k], f"키워드({k})가 기사 내 여러 번 등장하여 해당 영향({rules[k]})을 우선합니다."
+    return sentiment['label'], "특별한 우선순위 근거가 없어 감정분석 결과를 따릅니다."
+
+# KNU 감성사전 txt 파일을 pandas로 불러와 긍/부정 단어 세트로 만드는 코드 (자동 경로 탐색)
+def load_knu_sentilex():
+    # src, data 등 하위 폴더에서 SentiWord_Dict.txt 파일 자동 탐색
+    candidates = glob.glob('KnuSentiLex*/**/SentiWord_Dict.txt', recursive=True)
+    if not candidates:
+        print('[감성사전 경고] SentiWord_Dict.txt 파일을 찾을 수 없습니다.')
+        return set(), set()
+    path = candidates[0]
+    try:
+        df = pd.read_csv(path, sep='\t', encoding='utf-8')
+        pos_words = set(df[df['polarity'] > 0]['word'])
+        neg_words = set(df[df['polarity'] < 0]['word'])
+        print(f'[감성사전] 긍정 {len(pos_words)}개, 부정 {len(neg_words)}개 단어 로딩 (경로: {path})')
+        return pos_words, neg_words
+    except Exception as e:
+        print(f'[감성사전 로딩 오류] {e}')
+        return set(), set()
+
+positive_words, negative_words = load_knu_sentilex()
+
+# 감성사전 기반 감정 점수 계산 함수 (파일 상단에 추가)
+def count_sentiment_words(text, pos_words, neg_words):
+    words = re.findall(r'[가-힣]{2,}', text)
+    pos = sum(1 for w in words if w in pos_words)
+    neg = sum(1 for w in words if w in neg_words)
+    score = pos - neg
+    return {'positive': pos, 'negative': neg, 'score': score}
+
 def process_news_batch(news_list, stock_list):
     """뉴스 배치를 처리하는 함수"""
     processed_count = 0
@@ -88,40 +146,62 @@ def process_news_batch(news_list, stock_list):
         try:
             title = news.get("title") or ""
             content = news.get("content") or ""
-            
-            # 본문이 있으면 본문을 우선 분석, 없으면 제목만 분석
-            if content and len(content.strip()) > 50:  # 본문이 50자 이상이면
-                text = content + " " + title  # 본문 + 제목
-                print(f"본문 분석: {len(content)}자 본문 + 제목")
+            if content and len(content.strip()) > 50:
+                text = content + " " + title
             else:
-                text = title  # 제목만
-                print(f"제목만 분석: {len(title)}자 제목")
-            
+                text = title
             if not text.strip():
                 continue
-                
             sentiment = analyze_sentiment(text)
+            # --- 감성사전 기반 감정 점수 분석 ---
+            senti_score = count_sentiment_words(text, positive_words, negative_words)
+            
+            # --- 금융 키워드 분석 ---
+            financial_keywords = financial_keyword_loader.extract_financial_keywords_from_text(text)
+            sentiment_keywords = financial_keyword_loader.extract_sentiment_keywords_from_text(text)
+            impact_score = financial_keyword_loader.get_impact_score(text)
+            
             related_stocks = extract_stocks_from_text(text, stock_list)
             for stock in related_stocks:
                 stock["direction"] = predict_direction(sentiment['label'])
+            
+            # --- 키워드 추출 및 결합분석 ---
+            keywords = extract_impact_keywords(text, IMPACT_RULES)
+            final_label, reason_detail = decide_final_label(sentiment, keywords, IMPACT_RULES, title, content)
+            
+            # 금융 키워드 정보 추가
+            financial_keyword_info = []
+            for category, keywords_list in financial_keywords.items():
+                if keywords_list:
+                    financial_keyword_info.append(f"{category}: {', '.join(keywords_list)}")
+            
+            sentiment_keyword_info = []
+            for sentiment_type, keywords_list in sentiment_keywords.items():
+                if keywords_list:
+                    sentiment_keyword_info.append(f"{sentiment_type}: {', '.join(keywords_list)}")
+            
+            reason = f"[결합분석] {reason_detail} (감정분석: {sentiment['reason']}, 키워드: {', '.join(keywords) if keywords else '없음'}, 감성사전 점수: {senti_score}, 금융키워드: {'; '.join(financial_keyword_info) if financial_keyword_info else '없음'}, 감정키워드: {'; '.join(sentiment_keyword_info) if sentiment_keyword_info else '없음'}, 영향도점수: {impact_score})"
             analyzed = {
                 "_id": news["_id"],
                 "title": news.get("title"),
                 "content": news.get("content"),
                 "sentiment": sentiment,
+                "senti_score": senti_score,  # 감성사전 점수 추가
+                "financial_keywords": financial_keywords,  # 금융 키워드 추가
+                "sentiment_keywords": sentiment_keywords,  # 감정 키워드 추가
+                "impact_score": impact_score,  # 영향도 점수 추가
                 "published": news.get("published"),
                 "link": news.get("link"),
                 "related_stocks": related_stocks,
-                "reason": sentiment.get("reason")  # 분석근거 필드 추가
+                "reason": reason,  # 결합분석 근거
+                "final_label": final_label  # 결합분석 최종 방향
             }
             result_col.replace_one({"_id": news["_id"]}, analyzed, upsert=True)
-            print(f"분석 완료: {news.get('title')} → {sentiment}, 종목: {related_stocks}")
+            print(f"분석 완료: {news.get('title')} → {sentiment}, 감성사전: {senti_score}, 종목: {related_stocks}, 결합분석: {final_label}, 근거: {reason}")
             processed_count += 1
-            
         except Exception as e:
             print(f"뉴스 처리 중 오류 발생: {news.get('title', 'Unknown')} - {e}")
             continue
-    
     return processed_count
 
 # 전체 뉴스 분석 및 종목/방향 예측 (배치 처리)
