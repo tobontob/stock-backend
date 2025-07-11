@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from .analyze_sentiment import analyze_sentiment
-from .financial_keywords import financial_keyword_loader
+from news_analyzer.analyze_sentiment import analyze_sentiment
+from news_analyzer.financial_keywords import financial_keyword_loader
 import pandas as pd
 import requests
 from io import StringIO
@@ -11,8 +11,8 @@ import time
 from datetime import datetime, timedelta
 import csv
 import glob
-from .explain_util import generate_explanation
-from .article_crawler import fetch_article_content
+from news_analyzer.explain_util import generate_explanation
+from news_analyzer.article_crawler import fetch_article_content
 import logging
 
 # 로깅 설정
@@ -351,7 +351,7 @@ class NewsAnalyzer:
                 explanation = generate_explanation(text, company_name, industry)
                 
                 # 다중 관점 설명 생성
-                from .explain_util import generate_multi_perspective_explanation, enhance_explanation_with_data
+                from news_analyzer.explain_util import generate_multi_perspective_explanation, enhance_explanation_with_data
                 
                 multi_explanations = generate_multi_perspective_explanation(
                     text, company_name, industry, sentiment_label
