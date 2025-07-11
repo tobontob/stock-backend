@@ -14,19 +14,22 @@ id2label = {0: "neutral", 1: "positive", 2: "negative"}
 LIGHT_MODEL_NAME = "klue/roberta-base"  # 한국어 경량 모델
 light_tokenizer = None
 light_model = None
+light_model_available = False
 
 def load_light_model():
     """경량 모델을 필요시에만 로드하는 함수"""
-    global light_tokenizer, light_model
+    global light_tokenizer, light_model, light_model_available
     if light_tokenizer is None:
         try:
             light_tokenizer = AutoTokenizer.from_pretrained(LIGHT_MODEL_NAME)
             light_model = AutoModelForSequenceClassification.from_pretrained(LIGHT_MODEL_NAME)
+            light_model_available = True
             print(f"[경량모델] {LIGHT_MODEL_NAME} 로드 완료")
         except Exception as e:
             print(f"[경량모델 로드 실패] {e}")
+            light_model_available = False
             return False
-    return True
+    return light_model_available
 
 def analyze_sentiment_with_finbert(text, max_retries=2):
     """기존 KR-FinBERT 모델로 감정 분석"""
@@ -69,15 +72,19 @@ def analyze_sentiment_with_light_model(text, max_retries=2):
 
 def ensemble_sentiment_analysis(text, max_retries=2):
     """앙상블 방식으로 감정 분석 수행"""
-    # 두 모델로 분석
+    # FinBERT 분석
     finbert_result = analyze_sentiment_with_finbert(text, max_retries)
-    light_result = analyze_sentiment_with_light_model(text, max_retries)
+    
+    # 경량 모델 분석 (가능한 경우에만)
+    light_result = None
+    if load_light_model():
+        light_result = analyze_sentiment_with_light_model(text, max_retries)
     
     # 결과 결합
     results = []
     if finbert_result["label"]:
         results.append(finbert_result)
-    if light_result["label"]:
+    if light_result and light_result["label"]:
         results.append(light_result)
     
     if not results:
