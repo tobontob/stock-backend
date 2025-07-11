@@ -536,8 +536,8 @@ class FinancialKeywordLoader:
     
     def get_impact_score(self, text: str) -> Dict[str, float]:
         """개선된 영향도 점수 계산"""
-        # 기존 영향도 점수
-        base_score = super().get_impact_score(text)
+        # 기존 영향도 점수 (부모 없음 → 기본값 사용)
+        base_score = {"total": 0.0}
         
         # 추가적인 영향도 지표들
         additional_indicators = {
