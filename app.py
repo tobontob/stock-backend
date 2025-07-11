@@ -195,4 +195,70 @@ def health_check():
             "database": "disconnected",
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
-        } 
+        }
+
+@app.get("/advanced/analysis")
+def get_advanced_analysis():
+    """고급 분석 결과 조회"""
+    try:
+        from news_analyzer.advanced_analysis import advanced_analyzer
+        
+        # 최근 뉴스 데이터 가져오기
+        recent_news = list(result_col.find().sort("published", -1).limit(100))
+        
+        # 고급 분석 실행
+        market_trend = advanced_analyzer.analyze_market_sentiment_trend(recent_news)
+        sector_performance = advanced_analyzer.analyze_sector_performance(recent_news)
+        patterns = advanced_analyzer.detect_market_patterns(recent_news)
+        correlations = advanced_analyzer.analyze_correlation(recent_news)
+        
+        return {
+            "success": True,
+            "market_trend": market_trend,
+            "sector_performance": sector_performance,
+            "patterns": patterns,
+            "correlations": correlations
+        }
+    except Exception as e:
+        logger.error(f"고급 분석 실패: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/cache/stats")
+def get_cache_stats():
+    """캐시 통계 조회"""
+    try:
+        from news_analyzer.cache_manager import get_cache_stats
+        stats = get_cache_stats()
+        return {
+            "success": True,
+            "cache_stats": stats
+        }
+    except Exception as e:
+        logger.error(f"캐시 통계 조회 실패: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/performance/metrics")
+def get_performance_metrics():
+    """성능 메트릭 조회"""
+    try:
+        from news_analyzer.performance_monitor import performance_monitor
+        
+        # 최근 성능 지표
+        recent_metrics = performance_monitor.get_quality_summary(days=7)
+        
+        # 시스템 리소스 사용량 (간단한 구현)
+        import psutil
+        system_metrics = {
+            "cpu_percent": psutil.cpu_percent(),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage('/').percent
+        }
+        
+        return {
+            "success": True,
+            "analysis_metrics": recent_metrics,
+            "system_metrics": system_metrics
+        }
+    except Exception as e:
+        logger.error(f"성능 메트릭 조회 실패: {e}")
+        return {"success": False, "error": str(e)} 

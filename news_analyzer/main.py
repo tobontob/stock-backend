@@ -48,10 +48,11 @@ STOCK_EXTRACTION_CONFIG = {
     "max_content_length": 500,  # 본문에서 추출할 최대 길이 (앞부분)
     "min_confidence": 0.6,  # 최소 신뢰도
     "blacklist": [
-        "삼성전자", "LG전자", "현대차", "기아", "SK하이닉스",  # 너무 일반적인 종목들
-        "카카오", "네이버", "쿠팡", "배달의민족",  # IT 대기업들
-        "삼성생명", "교보생명", "한화생명",  # 보험사들
-        "신한은행", "KB국민은행", "우리은행", "하나은행",  # 은행들
+        # 너무 일반적인 종목들 (테스트를 위해 임시로 비활성화)
+        # "삼성전자", "LG전자", "현대차", "기아", "SK하이닉스",
+        # "카카오", "네이버", "쿠팡", "배달의민족",
+        # "삼성생명", "교보생명", "한화생명",
+        # "신한은행", "KB국민은행", "우리은행", "하나은행",
     ],
     "whitelist": {
         # 특정 업종에서 중요한 종목들
@@ -303,7 +304,11 @@ class NewsAnalyzer:
                 # 금융 키워드 분석
                 financial_keywords = financial_keyword_loader.extract_financial_keywords_from_text(text)
                 sentiment_keywords = financial_keyword_loader.extract_sentiment_keywords_from_text(text)
-                impact_score = financial_keyword_loader.get_impact_score(text)
+                try:
+                    impact_score = financial_keyword_loader.get_impact_score(text)
+                except Exception as e:
+                    logger.warning(f"영향도 점수 계산 실패: {e}")
+                    impact_score = {"total": 0.0, "urgency": 0.0, "volatility": 0.0, "market_impact": 0.0, "sector_specificity": 0.0}
                 
                 # 종목 추출
                 related_stocks = self.extract_stocks_from_text(text, self.stock_list)
