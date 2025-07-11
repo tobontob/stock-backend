@@ -1,6 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+import re
+from news_crawler.cleaner import clean_news_content
 
 ARTICLE_SELECTORS = {
     'hankyung.com': ['.article-body', '.art_read', '#articletxt'],
@@ -44,13 +46,6 @@ MARKERS = [
     '댓글', '댓글쓰기', '댓글을 남겨주세요', '의견쓰기'
 ]
 
-def clean_article_text(text):
-    for marker in MARKERS:
-        idx = text.find(marker)
-        if idx != -1:
-            text = text[:idx]
-    return text
-
 def get_domain(url):
     return urlparse(url).netloc.replace('www.', '')
 
@@ -65,20 +60,19 @@ def fetch_article_content(url):
         for selector in selectors:
             content = soup.select_one(selector)
             if content and len(content.get_text(strip=True)) > 50:
-                # 불필요한 하위 영역 제거
                 for unwanted in UNWANTED_SELECTORS:
                     for tag in content.select(unwanted):
                         tag.decompose()
                 text = content.get_text(separator=' ', strip=True)
-                text = clean_article_text(text)  # 댓글 등 마커 이후 제거
-                if len(text) > 50:
+                text = clean_news_content(text)
+                if text and len(text) > 100:
                     return text
         # fallback: 가장 긴 div/p
         candidates = []
         for tag in soup.find_all(['div', 'p']):
             text = tag.get_text(separator=' ', strip=True)
-            text = clean_article_text(text)
-            if len(text) > 100:
+            text = clean_news_content(text)
+            if text and len(text) > 100:
                 candidates.append((len(text), text))
         if candidates:
             candidates.sort(reverse=True)
