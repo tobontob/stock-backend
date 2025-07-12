@@ -74,6 +74,38 @@ def extract_keywords(text: str, db_keywords: List[str]) -> List[str]:
     sorted_keywords = sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True)
     return [kw for kw, score in sorted_keywords[:5]]  # 상위 5개만
 
+def generate_fallback_explanation(company_name: str, industry: str, sentiment: str, news_text: str = "") -> str:
+    """키워드가 없을 때 기사 맥락을 활용한 기본 설명"""
+    # 기사에서 주요 이슈 추출(간단 버전: 제목/첫문단 100자)
+    main_issue = news_text[:100] if news_text else ""
+    if main_issue:
+        if sentiment == 'positive':
+            return f"기사 주요 이슈: {main_issue} 이 이슈는 {industry} 업종 및 관련 종목에 긍정적 영향을 줄 수 있습니다."
+        elif sentiment == 'negative':
+            return f"기사 주요 이슈: {main_issue} 이 이슈는 {industry} 업종 및 관련 종목에 부정적 영향을 줄 수 있습니다."
+        else:
+            return f"기사 주요 이슈: {main_issue} 이 이슈는 {industry} 업종에 중립적 영향을 줄 수 있습니다."
+    # 기존 템플릿(백업)
+    fallback_templates = {
+        'positive': [
+            f"{company_name}의 최근 동향은 {industry} 업종에서 긍정적인 반응을 보이고 있습니다.",
+            f"{company_name}의 성과는 {industry} 분야에서 기대감을 제시하고 있습니다.",
+            f"{company_name}의 전망은 {industry} 업종 내에서 낙관적으로 분석됩니다."
+        ],
+        'negative': [
+            f"{company_name}의 현재 상황은 {industry} 업종에서 우려감을 나타내고 있습니다.",
+            f"{company_name}의 동향은 {industry} 분야에서 주의가 필요한 상황입니다.",
+            f"{company_name}의 전망은 {industry} 업종 내에서 신중한 접근이 요구됩니다."
+        ],
+        'neutral': [
+            f"{company_name}의 상황은 {industry} 업종에서 안정적인 모습을 보이고 있습니다.",
+            f"{company_name}의 동향은 {industry} 분야에서 관망세를 나타내고 있습니다.",
+            f"{company_name}의 전망은 {industry} 업종 내에서 보합세를 유지하고 있습니다."
+        ]
+    }
+    templates = fallback_templates.get(sentiment, fallback_templates['neutral'])
+    return random.choice(templates)
+
 def generate_contextual_explanation(news_text: str, company_name: str, industry: str, 
                                   sentiment: str = 'neutral', template_type: str = 'basic') -> str:
     """문맥을 고려한 설명형 분석근거 생성"""
@@ -83,7 +115,7 @@ def generate_contextual_explanation(news_text: str, company_name: str, industry:
     matched_keywords = extract_keywords(news_text, db_keywords)
     
     if not matched_keywords:
-        return generate_fallback_explanation(company_name, industry, sentiment)
+        return generate_fallback_explanation(company_name, industry, sentiment, news_text)
     
     explanations = []
     used_template = TEMPLATES.get(template_type, TEMPLATES['basic'])
@@ -119,31 +151,7 @@ def generate_contextual_explanation(news_text: str, company_name: str, industry:
     if explanations:
         return " ".join(explanations)
     else:
-        return generate_fallback_explanation(company_name, industry, sentiment)
-
-def generate_fallback_explanation(company_name: str, industry: str, sentiment: str) -> str:
-    """키워드가 없을 때 사용할 기본 설명"""
-    
-    fallback_templates = {
-        'positive': [
-            f"{company_name}의 최근 동향은 {industry} 업종에서 긍정적인 반응을 보이고 있습니다.",
-            f"{company_name}의 성과는 {industry} 분야에서 기대감을 제시하고 있습니다.",
-            f"{company_name}의 전망은 {industry} 업종 내에서 낙관적으로 분석됩니다."
-        ],
-        'negative': [
-            f"{company_name}의 현재 상황은 {industry} 업종에서 우려감을 나타내고 있습니다.",
-            f"{company_name}의 동향은 {industry} 분야에서 주의가 필요한 상황입니다.",
-            f"{company_name}의 전망은 {industry} 업종 내에서 신중한 접근이 요구됩니다."
-        ],
-        'neutral': [
-            f"{company_name}의 상황은 {industry} 업종에서 안정적인 모습을 보이고 있습니다.",
-            f"{company_name}의 동향은 {industry} 분야에서 관망세를 나타내고 있습니다.",
-            f"{company_name}의 전망은 {industry} 업종 내에서 보합세를 유지하고 있습니다."
-        ]
-    }
-    
-    templates = fallback_templates.get(sentiment, fallback_templates['neutral'])
-    return random.choice(templates)
+        return generate_fallback_explanation(company_name, industry, sentiment, news_text)
 
 def generate_multi_perspective_explanation(news_text: str, company_name: str, industry: str, 
                                          sentiment: str = 'neutral') -> Dict[str, str]:

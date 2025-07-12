@@ -350,40 +350,17 @@ class NewsAnalyzer:
                 sentiment_label = sentiment['label']
                 explanation = generate_explanation(text, company_name, industry)
                 
-                # 다중 관점 설명 생성
-                from news_analyzer.explain_util import generate_multi_perspective_explanation, enhance_explanation_with_data
-                
-                multi_explanations = generate_multi_perspective_explanation(
-                    text, company_name, industry, sentiment_label
-                )
-                
                 # 추가 데이터로 설명 강화
                 additional_data = {
                     'sentiment_score': sentiment.get('score', 0),
                     'keyword_count': len(financial_keywords.get('stock_keywords', [])) + len(sentiment_keywords.get('positive', [])) + len(sentiment_keywords.get('negative', []))
                 }
-                
                 enhanced_explanation = enhance_explanation_with_data(explanation, additional_data)
                 
-                # 금융 키워드 정보 추가
-                financial_keyword_info = []
-                for category, keywords_list in financial_keywords.items():
-                    if keywords_list:
-                        financial_keyword_info.append(f"{category}: {', '.join(keywords_list)}")
-                
-                sentiment_keyword_info = []
-                for sentiment_type, keywords_list in sentiment_keywords.items():
-                    if keywords_list:
-                        sentiment_keyword_info.append(f"{sentiment_type}: {', '.join(keywords_list)}")
-                
+                # reason을 자연어 설명만 포함하도록 변경
                 reason = ""
                 if enhanced_explanation:
-                    reason += f"[설명형 분석근거] {enhanced_explanation}\n"
-                reason += f"[결합분석] {reason_detail} (감정분석: {sentiment['reason']}, 키워드: {', '.join(keywords) if keywords else '없음'}, 감성사전 점수: {senti_score}, 금융키워드: {'; '.join(financial_keyword_info) if financial_keyword_info else '없음'}, 감정키워드: {'; '.join(sentiment_keyword_info) if sentiment_keyword_info else '없음'}, 영향도점수: {impact_score})"
-                
-                # 다중 관점 설명 추가
-                if multi_explanations:
-                    reason += f"\n[다중관점분석] 시장관점: {multi_explanations.get('market', 'N/A')}, 업종관점: {multi_explanations.get('sector', 'N/A')}, 트렌드관점: {multi_explanations.get('trend', 'N/A')}"
+                    reason += f"[설명형 분석근거] {enhanced_explanation}"
                 
                 analyzed = {
                     "_id": news["_id"],
@@ -399,7 +376,7 @@ class NewsAnalyzer:
                     "related_stocks": related_stocks,
                     "reason": reason,
                     "final_label": final_label,
-                    "multi_perspective_analysis": multi_explanations,
+                    "multi_perspective_analysis": {},
                     "analysis_quality": {
                         "sentiment_confidence": sentiment.get('score', 0),
                         "keyword_diversity": len(financial_keywords.get('stock_keywords', [])),
